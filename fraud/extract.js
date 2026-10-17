@@ -17,6 +17,18 @@ class ExtractError extends Error {
     }
 }
 
+// A browser renders block elements apart, but cheerio's .text() just concatenates them, so
+// "<p>…2026-01-05</p><p>Guests: 3 guests</p>" collapses to "2026-01-05Guests: 3 guests" with
+// no gap. Every \b anchor below then looks for a boundary that is not there: the date pair
+// stops matching and the guest count disappears. Put the gap back before reading any text.
+function bodyText($) {
+    const $body = $('body');
+    $body.find('*').each((_, element) => {
+        $(element).after(' ');
+    });
+    return $body.text().replace(/\s+/g, ' ').trim();
+}
+
 function findListingId(url, $) {
     // The URL comes from the sandbox that actually drove the browser, the page body does not.
     // A swapped listing can print any id it likes in its own markup, so the URL wins.
@@ -94,8 +106,10 @@ function extractTotal($, text) {
 
 function extractGuests($, text) {
     const source = $('[data-testid="guest-count"]').first().text() || text;
-    // Capped at two digits so a nearby year ("Nov 5 - 9, 2026 Guests: 2") cannot be read as a count.
-    const guests = /\b(\d{1,2})\s*guests?\b/i.exec(source);
+    // Capped at two digits so a nearby year ("Nov 5 - 9, 2026 Guests: 2") cannot be read as a count,
+    // and refused after a digit or hyphen so the tail of an ISO date cannot be either: in
+    // "2026-01-05 Guests: 2 guests" a plain \b happily reads the 05 as five guests.
+    const guests = /(?<![\d-])(\d{1,2})\s*guests?\b/i.exec(source);
     if (!guests) {
         throw new ExtractError('guests not found');
     }
@@ -119,7 +133,7 @@ function extractHost($, text) {
 
 function extract(html, url, source) {
     const $ = cheerio.load(html);
-    const text = $('body').text().replace(/\s+/g, ' ').trim();
+    const text = bodyText($);
     const listingId = findListingId(url, $);
     if (!listingId) {
         throw new ExtractError('listingId not found in url or canonical link');

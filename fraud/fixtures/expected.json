@@ -17,6 +17,14 @@
       "fields": []
     },
     {
+      "name": "iso_dates",
+      "kind": "compare",
+      "initial": { "file": "iso_dates_listing.html", "url": "https://www.airbnb.com/rooms/73105522" },
+      "final": { "file": "iso_dates_final.html", "url": "https://www.airbnb.com/rooms/73105522" },
+      "status": "OK",
+      "fields": []
+    },
+    {
       "name": "paris_price",
       "kind": "compare",
       "initial": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },

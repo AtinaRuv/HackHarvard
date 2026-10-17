@@ -1,0 +1,13 @@
+{
+  "listingId": "51234567",
+  "title": "Sunny Loft near Canal Saint-Martin",
+  "checkIn": "2026-10-20",
+  "checkOut": "2026-10-23",
+  "guests": 4,
+  "totalPrice": 700,
+  "currency": "USD",
+  "host": "Camille",
+  "source": "listing",
+  "createdAt": "2026-10-17T12:00:00.000Z",
+  "sig": "9ba131d9dbced84110c474fc177a78ecedeb24a005493880d46d6621b49262c2"
+}

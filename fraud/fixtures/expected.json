@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {
+      "name": "paris",
+      "kind": "compare",
+      "initial": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "final": { "file": "paris_final.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "status": "OK",
+      "fields": []
+    },
+    {
+      "name": "lisbon",
+      "kind": "compare",
+      "initial": { "file": "lisbon_listing.html", "url": "https://www.airbnb.com/rooms/48219703" },
+      "final": { "file": "lisbon_final.html", "url": "https://www.airbnb.com/rooms/48219703" },
+      "status": "OK",
+      "fields": []
+    },
+    {
+      "name": "paris_price",
+      "kind": "compare",
+      "initial": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "final": { "file": "attack_price_final.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "status": "BLOCK",
+      "fields": ["totalPrice"]
+    },
+    {
+      "name": "paris_swap",
+      "kind": "compare",
+      "initial": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "final": { "file": "attack_swap_final.html", "url": "https://www.airbnb.com/rooms/69876543" },
+      "status": "BLOCK",
+      "fields": ["listingId"]
+    },
+    {
+      "name": "paris_dates",
+      "kind": "compare",
+      "initial": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "final": { "file": "attack_dates_final.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "status": "BLOCK",
+      "fields": ["checkIn"]
+    },
+    {
+      "name": "tamper",
+      "kind": "compare",
+      "initialToken": "attack_tamper.json",
+      "final": { "file": "paris_final.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "status": "BLOCK",
+      "fields": ["signature", "totalPrice"]
+    },
+    {
+      "name": "edit_guests",
+      "kind": "compare",
+      "initial": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "edit": { "guests": 5, "nickname": "ignored unknown field" },
+      "changed": ["guests"],
+      "final": { "file": "paris_edit_final.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "status": "OK",
+      "fields": []
+    },
+    {
+      "name": "scam_listing",
+      "kind": "signals",
+      "listing": { "file": "scam_listing.html", "url": "https://airbnb-deals-paris.com/rooms/99887766" },
+      "status": "WARN",
+      "codes": ["off_platform", "off_platform_payment", "no_reviews", "new_host", "price_too_good"]
+    },
+    {
+      "name": "paris_signals",
+      "kind": "signals",
+      "listing": { "file": "paris_listing.html", "url": "https://www.airbnb.com/rooms/51234567" },
+      "status": "OK",
+      "codes": []
+    }
+  ]
+}

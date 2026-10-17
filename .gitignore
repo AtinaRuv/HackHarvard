@@ -3,12 +3,6 @@
 .env.*
 !.env.example
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-.pytest_cache/
-
 # JavaScript
 node_modules/
 dist/

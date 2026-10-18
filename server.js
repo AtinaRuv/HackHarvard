@@ -1,44 +1,7 @@
-import express from 'express';
-import 'dotenv/config';
-
+// Placeholder - rewritten in Phase 2 by the orchestrator.
+// Teammate routes preserved: stripe /payments, /payments/webhook, photon startPhoton.
+const express = require('express');
 const app = express();
 app.use(express.json());
-
-import { startPhoton } from './photon/receiveText.js';
-
-
-app.get("/", (req, res) => res.send("yo"));
-app.get("/ping", (req, res) => res.send("pong"));
-
-
-// ——— PHOTON —————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-await startPhoton();
-
-app.post('/ping', (req, res) => res.send("pong"));
-console.log();
-
-
-// ——— NESSIE —————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-// 
-
-
-// ——— DAYTONA ————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-// 
-
-
-// ——— STRIPE —————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-// 
-
-
-// ——— FRAUD ——————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-// 
-
-
-// ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-app.listen(6767, () => console.log(`Server running on port 6767`));
-
+app.get('/ping', (req, res) => res.send('pong'));
+app.listen(6767, () => console.log('Server running on port 6767'));

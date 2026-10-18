@@ -1,5 +1,7 @@
 import { Spectrum } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
+import { addUser } from "../main.js";
+import { sendText } from "./sendText.js";
 
 export async function startPhoton() {
     try {
@@ -16,9 +18,11 @@ export async function startPhoton() {
             const text = message.content.text;
             console.log(text);
 
-            // const im = imessage(photon);
-            // const members = await im.getMembers(space);
-            // console.log(members);
+            const im = imessage(photon);
+            const members = await im.getMembers(space);
+            members.forEach((user) => {
+                return addUser(user)
+            });
         }
     } catch (e) {}
 }

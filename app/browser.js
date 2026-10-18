@@ -1,3 +1,4 @@
+import {staynestUrl,inspectStaynest} from './staynest.js';
 import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 const require = createRequire(import.meta.url);
@@ -9,13 +10,14 @@ export class BookingBrowser {
     this.live?.start(booking.id,phase);
     const frame=update=>this.live?.frame(booking.id,phase,update);
     const input = { mode: this.mode, phase,stepDelayMs:this.stepDelayMs, url: booking.listingUrl, facts: { ...booking.requested, listingId: booking.listingId, listingUrl: booking.listingUrl, destination: 'airbnb.com' }, answers: booking.answers };
-    if (['demo','airbnb-demo'].includes(this.mode) && phase === 'final') {
+    if(staynestUrl(booking.listingUrl)){input.mode='staynest';input.facts=await inspectStaynest(booking,phase);}
+    if (!staynestUrl(booking.listingUrl)&&['demo','airbnb-demo'].includes(this.mode) && phase === 'final') {
       if (booking.demoScenario === 'price') input.facts.totalCents += 10000;
       if (booking.demoScenario === 'destination') input.facts.destination = 'attacker.example';
       if (booking.demoScenario === 'dates') input.facts.checkOut = new Date(Date.parse(input.facts.checkOut) + 86400000).toISOString().slice(0, 10);
     }
     if (this.provider === 'local') {
-      if (this.mode !== 'demo') throw new Error('Airbnb inspection requires the Daytona provider.');
+      if (!['demo','staynest'].includes(input.mode)) throw new Error('Airbnb inspection requires the Daytona provider.');
       const playwright = require('playwright');
       const brave = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
       const executablePath = this.executablePath || (!existsSync(playwright.chromium.executablePath()) && existsSync(brave) ? brave : undefined);
@@ -27,7 +29,7 @@ export class BookingBrowser {
     const sandboxName=`leash-${booking.id}-${phase}-${Date.now()}`;
     try {
       sandbox = await daytona.create({ name: sandboxName, language: 'javascript', public: false, autoStopInterval: 2, autoDeleteInterval: 0, ttlMinutes: 10,
-        ...(this.mode!=='demo'?{domainAllowList:'airbnb.com,*.airbnb.com,muscache.com,*.muscache.com'}:{networkBlockAll:true}),
+        ...(input.mode==='staynest'?{domainAllowList:new URL(booking.listingUrl).hostname}:this.mode!=='demo'?{domainAllowList:'airbnb.com,*.airbnb.com,muscache.com,*.muscache.com'}:{networkBlockAll:true}),
         ...(process.env.DAYTONA_BROWSER_SNAPSHOT?{snapshot:process.env.DAYTONA_BROWSER_SNAPSHOT}:{image: Image.base('mcr.microsoft.com/playwright:v1.64.0-noble').runCommands('npm install --prefix /opt/leash-browser --ignore-scripts --no-audit --no-fund playwright@1.64.0 cheerio@1.2.0')}) }, {timeout:240});
       input.playwrightPath = '/opt/leash-browser/node_modules/playwright';
       input.livePath='/tmp/live.json';input.quotePath='/tmp/quote.json';input.decisionPath='/tmp/decision.json';

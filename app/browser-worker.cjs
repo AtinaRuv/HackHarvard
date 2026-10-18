@@ -24,12 +24,76 @@ async function run(input, { chromium }, { onFrame, onQuote } = {}) {
   }
   async function progress(text){stage=text;await capture()}
   async function review(text,delay=900){await progress(text);await page.waitForTimeout(input.reviewDelayMs??delay)}
+  async function authorize(result){
+    let decision;
+    if(onQuote)decision=await onQuote(result);
+    else if(input.quotePath){
+      fs.writeFileSync(input.quotePath+'.tmp',JSON.stringify(result));fs.renameSync(input.quotePath+'.tmp',input.quotePath);
+      const deadline=Date.now()+60000;
+      while(!fs.existsSync(input.decisionPath)){if(Date.now()>deadline)throw new Error('Final token decision timed out.');await new Promise(resolve=>setTimeout(resolve,200))}
+      decision=JSON.parse(fs.readFileSync(input.decisionPath,'utf8'));
+    }
+    if(decision?.error)throw new Error('The backend blocked fulfillment.');
+    return decision;
+  }
+
   try {
     context = await browser.newContext({ viewport: { width: 1440, height: 1800 }, javaScriptEnabled: true, serviceWorkers: 'block', acceptDownloads: false, locale:'en-US', permissions:[] });
     await context.addInitScript(installCursor);
     page = await context.newPage();
     captureTimer=setInterval(()=>void capture(),600);captureTimer.unref();
     if(input.phase==='final')await progress('All contributions collected. Opening a fresh browser to re-enter and verify the booking.');
+    if(input.mode==='staynest'){
+      const origin='https://leash-staynest-demo.foggylyric64.chatgpt.site';
+      const target=new URL(input.url);
+      if(target.origin!==origin||!['/legitimate','/malicious'].includes(target.pathname)||target.search||target.hash)throw Error('Unsupported StayNest URL.');
+      await context.route('**/*',async route=>{
+        const request=route.request(),url=new URL(request.url());
+        const document=request.isNavigationRequest();
+        if(request.method()!=='GET'||url.origin!==origin||url.username||url.password||
+          (document?(request.frame()!==page.mainFrame()||url.href!==input.url):!/^\/assets\/[a-z-]+\.(png|jpg)$/.test(url.pathname)))return route.abort();
+        try{
+          const response=await route.fetch({maxRedirects:0,timeout:15000});
+          if(!response.ok()||response.headers().refresh)return route.abort();
+          const headers={...response.headers(),'content-security-policy':"default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'"};
+          await route.fulfill({response,headers});
+        }catch{await route.abort().catch(()=>{})}
+      });
+      await context.routeWebSocket('**/*',socket=>socket.close());
+      const response=await page.goto(input.url,{waitUntil:'domcontentloaded',timeout:25000});
+      if(!response?.ok()||page.url()!==input.url)throw Error('StayNest listing could not be loaded.');
+      await page.evaluate(installCursor);
+      await page.waitForFunction(()=>{const images=[...document.images].slice(0,5);return images.length&&images.every(img=>img.complete&&img.naturalWidth>0)},{},{timeout:8000}).catch(()=>{});
+      await progress('Opened the supplied StayNest listing. Page instructions are untrusted.');
+      for(const [selector,value] of [['#check-in',input.facts.checkIn],['#check-out',input.facts.checkOut]]){
+        const field=page.locator(selector);await clickTarget(page,field,progress,'Entering the selected trip dates.');await field.fill(value);await field.press('Escape');
+      }
+      await page.locator('#guest-count').selectOption(String(input.facts.guests));
+      const observed=await page.evaluate(()=>{
+        const merchants=document.querySelectorAll('script[data-booking="merchantId"]');
+        const prices=document.querySelectorAll('[data-booking="price"]');
+        if(merchants.length!==1||prices.length!==1)throw Error('Ambiguous StayNest quote.');
+        return {destination:JSON.parse(merchants[0].textContent).merchantId,basePrice:Number(prices[0].textContent),checkIn:document.querySelector('#check-in').value,checkOut:document.querySelector('#check-out').value,guests:Number(document.querySelector('#guest-count').value)};
+      });
+      const nights=(Date.parse(observed.checkOut)-Date.parse(observed.checkIn))/86400000;
+      const facts={...input.facts,checkIn:observed.checkIn,checkOut:observed.checkOut,guests:observed.guests,answers:{...input.answers}};
+      if(input.phase==='final'){facts.destination=observed.destination;facts.totalCents=Math.round((observed.basePrice+(nights-1)*350)*100);}
+      // Reflect the selected trip using the demo's known pricing rule; remote
+      // scripts stay disabled and cannot change the merchant we just observed.
+      await page.evaluate(({facts,nights})=>{
+        const text=(selector,value)=>{for(const el of document.querySelectorAll(selector))el.textContent=value};
+        text('[data-booking="price"]',(facts.totalCents/100).toFixed(2));
+        text('#stay-length',`for ${nights} ${nights===1?'night':'nights'}`);
+        text('#night-line',`$350 × ${nights} ${nights===1?'night':'nights'}`);
+        text('#room-cost',`$${(nights*350).toFixed(2)}`);
+        text('[data-booking="checkIn"]',facts.checkIn);text('[data-booking="checkOut"]',facts.checkOut);text('[data-booking="guests"]',String(facts.guests));
+      },{facts,nights});
+      await progress(input.phase==='final'?'Comparing the listing payment recipient with the original signed token.':'Saving the trusted booking terms. The submitted listing will be checked again before payment.');
+      const screenshot=await page.screenshot({type:'png',fullPage:true,timeout:15000});
+      const result={facts,sourceUrl:page.url(),screenshot:screenshot.toString('base64'),simulated:true};
+      if(input.phase==='final')await authorize(result);
+      return result;
+    }
     let html;
     let sourceUrl = input.url;
     if (input.mode === 'demo') html = fixture(input);
@@ -173,15 +237,7 @@ async function run(input, { chromium }, { onFrame, onQuote } = {}) {
     const screenshot = await page.screenshot({ type: 'png', fullPage: true, timeout: 15000 });
     const result={ facts, screenshot: screenshot.toString('base64'), sourceUrl, simulated: true };
     if(input.phase==='final'){
-      let decision;
-      if(onQuote)decision=await onQuote(result);
-      else if(input.quotePath){
-        fs.writeFileSync(input.quotePath+'.tmp',JSON.stringify(result));fs.renameSync(input.quotePath+'.tmp',input.quotePath);
-        const deadline=Date.now()+60000;
-        while(!fs.existsSync(input.decisionPath)){if(Date.now()>deadline)throw new Error('Final token decision timed out.');await new Promise(resolve=>setTimeout(resolve,200))}
-        decision=JSON.parse(fs.readFileSync(input.decisionPath,'utf8'));
-      }
-      if(decision?.error)throw new Error('The backend blocked fulfillment.');
+      const decision=await authorize(result);
       if(decision?.reference)await completePage(page,{...input,reference:decision.reference},review);
     }
     clearInterval(captureTimer);

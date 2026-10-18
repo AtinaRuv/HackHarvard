@@ -27,7 +27,7 @@ try{
   const space={id:`group_${scenario}`,type:'group',getMembers:async()=>members,send:async body=>{groupMessages.push(body)}};
   let serial=0;
   const inbound=(text,type='text')=>runtime.chatHandler(space,{id:`message_${scenario}_${serial++}`,direction:'inbound',sender:{id:members[0].id},content:type==='text'?{type,text}:{type:'addMember'}});
-  await inbound('','addMember');assert.match(groupMessages.at(-1),/listing link/);
+  await inbound('','addMember');assert.match(groupMessages.at(-1),/Send me the online payment/);
   await inbound('https://www.airbnb.com/rooms/12345678?check_in=2026-11-14&check_out=2026-11-17');
   let b=runtime.store.all().at(-1);assert.equal(b.status,'INTAKE');
   await inbound('3 nights');

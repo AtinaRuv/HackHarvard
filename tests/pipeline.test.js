@@ -1,6 +1,7 @@
+import {staynestQuote,staynestUrl,STAYNEST_ORIGIN,STAYNEST_MERCHANT} from '../app/staynest.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../app/store.js';
@@ -294,4 +295,45 @@ test('group chat asks nights even with dates in the listing URL and keeps the gr
  assert.equal(store.get(b.id).requested.guests,3);
  assert.equal(pipeline.questions(store.get(b.id))[0].field,'guestName');
  assert.ok(!pipeline.questions(store.get(b.id)).some(q=>q.field==='guests'));
+});
+
+test('StayNest malicious URL in chat blocks the final token and refunds every paid participant',async t=>{
+ const {pipeline,store,counts}=setup(t);let inspections=0;
+ pipeline.browser.inspect=async(b,phase,{commit}={})=>{
+  inspections++;
+  const body=readFileSync(new URL(`./fixtures/staynest/${phase==='initial'?'legitimate':'malicious'}.html`,import.meta.url));
+  const facts={...staynestQuote(b,phase,body),answers:b.answers};
+  const result={facts,sourceUrl:b.listingUrl,screenshot:png};
+  if(commit)await commit(result);
+  return result;
+ };
+ const handler=createChatHandler(pipeline);let serial=0;
+ const members=baseInput.participants.slice(0,2);
+ const group={id:'staynest-group',type:'group',getMembers:async()=>members.map(p=>({id:p.contact,name:p.name})),send:async()=>{}};
+ const send=(target,text,index=0)=>handler(target,{id:`staynest-${serial++}`,sender:{id:members[index].contact},content:{type:'text',text}});
+ await send(group,STAYNEST_ORIGIN+'/malicious');
+ const id=store.all()[0].id;
+ await send(group,'2026-10-24');await send(group,'2 nights');await send(group,'Book under Alex');
+ for(const [i,p] of members.entries())await send({id:`staynest-dm-${i}`,type:'dm',send:async()=>{}},p.email,i);
+ let b=store.get(id);assert.equal(b.status,'COLLECTING');assert.equal(b.initialToken.destination,STAYNEST_MERCHANT);assert.equal(b.initialToken.totalCents,75000);
+ await payment(pipeline,id,0);await payment(pipeline,id,1);
+ b=store.get(id);assert.equal(b.status,'REFUNDED');assert.equal(b.balanceCents,0);
+ assert.equal(b.comparison.status,'BLOCK');assert.ok(b.comparison.differences.includes('destination'));
+ assert.equal(b.finalToken.destination,'UNAUTHORIZED-MERCHANT-999');assert.equal(counts.spend,0);assert.equal(counts.refunds,2);assert.equal(counts.reverse,2);assert.equal(inspections,2);
+ assert.ok(b.participants.every(p=>p.status==='refunded'&&p.bankReversed));assert.equal(b.confirmation,undefined);
+ await pipeline.advance(id);assert.equal(counts.refunds,2);assert.equal(counts.reverse,2);
+});
+test('StayNest URL and reviewed baseline cannot be replaced by arbitrary hosts or page claims',()=>{
+ assert.equal(staynestUrl(STAYNEST_ORIGIN+'/malicious.html'),STAYNEST_ORIGIN+'/malicious');
+ for(const url of [STAYNEST_ORIGIN+'.evil.example/malicious',STAYNEST_ORIGIN+'/malicious?next=evil',STAYNEST_ORIGIN+'/other'])assert.equal(staynestUrl(url),null);
+ const b={listingUrl:STAYNEST_ORIGIN+'/malicious',requested:{checkIn:'2026-10-24',checkOut:'2026-10-25',guests:2}};
+ const legitimate=readFileSync(new URL('./fixtures/staynest/legitimate.html',import.meta.url));
+ assert.equal(staynestQuote(b,'final',legitimate).destination,STAYNEST_MERCHANT);
+ assert.throws(()=>staynestQuote(b,'initial',Buffer.concat([legitimate,Buffer.from('changed')])),/reviewed StayNest demo changed/);
+});
+
+test('StayNest intake accepts the configured Stripe test payment provider',t=>{
+ const {pipeline}=setup(t);pipeline.payments.mode='stripe';
+ const b=pipeline.create({...structuredClone(baseInput),listingUrl:STAYNEST_ORIGIN+'/malicious'});
+ assert.equal(b.status,'INTAKE');assert.equal(b.listingId,'staynest-harbor-view-loft');
 });

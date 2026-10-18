@@ -1,3 +1,4 @@
+import {staynestUrl,STAYNEST_MERCHANT} from './staynest.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -40,6 +41,7 @@ export class Pipeline {
   create(input) {
     const listingUrl = airbnbUrl(input.listingUrl);
     const url = new URL(listingUrl);
+    const staynest=Boolean(staynestUrl(listingUrl));
     const participants = input.participants;
     if (!Array.isArray(participants) || participants.length < 1 || participants.length > 50) fail('Provide 1–50 attendees.');
     if (new Set(participants.map(p => p.contact)).size !== participants.length) fail('Attendee contacts must be unique.');
@@ -57,7 +59,7 @@ export class Pipeline {
     if (this.mode === 'demo'&&requested.checkIn&&requested.checkOut) validateFacts(requested);
     if(this.mode==='demo'&&(!Number.isSafeInteger(requested.taxCents)||requested.taxCents<0||requested.taxCents>requested.totalCents))fail('Included taxes must be whole cents between zero and the final total.');
     const b = { id: randomUUID(), access: opaque(), createdAt: now(), status: 'INTAKE', listingUrl,
-      listingId: /\/rooms\/(\d+)/.exec(url.pathname)[1], organizerContact: participants[0].contact, spaceId: input.spaceId || null,
+      listingId: staynest?'staynest-harbor-view-loft':/\/rooms\/(\d+)/.exec(url.pathname)[1], organizerContact: participants[0].contact, spaceId: input.spaceId || null,
       requested, demoScenario: this.mode === 'demo' ? input.demoScenario : null, answers: {}, participants: participants.map(p => ({ id: randomUUID(), access: opaque(), name: p.name.trim(), contact: p.contact, email: p.email || '', status: 'unpaid' })),
       balanceCents: 0, events: [], outbox: [], processedEvents: [], simulation: true };
     this.event(b, 'created', 'Group started. Opening a simulated booking account.');
@@ -160,7 +162,7 @@ export class Pipeline {
   token(b, result) {
     if (result.sourceUrl !== b.listingUrl) throw new Error('The browser was redirected from the original listing.');
     const facts = result.facts;
-    if (facts.listingId !== b.listingId || facts.listingUrl !== b.listingUrl || facts.destination !== 'airbnb.com') throw new Error('The listing or payment destination changed.');
+    if (facts.listingId !== b.listingId || facts.listingUrl !== b.listingUrl || facts.destination !== (staynestUrl(b.listingUrl)?STAYNEST_MERCHANT:'airbnb.com')) throw new Error('The listing or payment destination changed.');
     validateFacts(facts);
     if (facts.guests !== b.participants.length) throw new Error('The checkout guest count does not match the group.');
     return sign({ ...facts, bookingId: b.id }, this.store.secret);
@@ -168,7 +170,7 @@ export class Pipeline {
   async prepare(id) {
     let b = this.store.change(id, b => {
       const listing = new URL(b.listingUrl);
-      listing.searchParams.set('check_in',b.requested.checkIn);listing.searchParams.set('check_out',b.requested.checkOut);listing.searchParams.set('adults',String(b.requested.guests));
+      if(!staynestUrl(b.listingUrl)){listing.searchParams.set('check_in',b.requested.checkIn);listing.searchParams.set('check_out',b.requested.checkOut);listing.searchParams.set('adults',String(b.requested.guests));}
       b.listingUrl=listing.href;
       b.status = 'PREPARING'; this.event(b, 'browser', 'Session 1: filling booking details and calculating the final total, including taxes.');
       this.queue(b,'preparing_group','group',b.spaceId||b.organizerContact,'I’m opening the listing and filling in your details. I’ll send everyone their share privately once I have the final price.');

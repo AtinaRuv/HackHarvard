@@ -1,6 +1,8 @@
+import {staynestUrl} from './staynest.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export function airbnbUrl(value) {
+  const demo=staynestUrl(value);if(demo)return demo;
   const url = new URL(value);
   if (url.protocol !== 'https:' || url.username || url.password || url.port ||
       !/^(www\.)?airbnb\.com$/.test(url.hostname) || !/^\/rooms\/\d+\/?$/.test(url.pathname)) {

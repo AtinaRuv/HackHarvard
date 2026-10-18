@@ -36,7 +36,7 @@ test('listing greeting is sent once across distinct events and handler restarts'
  await handler(space,message('hello','hello'));
  await handler(space,message('another','hey'));
  await createChatHandler(pipeline)(space,message('restart','yo'));
- assert.equal(replies.filter(text=>text.includes('Send me the Airbnb listing link')).length,1);assert.equal(replies.filter(text=>text.includes('I’m here.')).length,1);
+ assert.equal(replies.filter(text=>text.includes('Send me the online payment')).length,1);assert.equal(replies.filter(text=>text.includes('I’m here.')).length,1);
 });
 test('organizer can bypass from the group; replay and other attendees cannot trigger it',async t=>{
  const{pipeline,handler,replies,space,message}=fixture(t);let calls=0,advances=0;
@@ -70,5 +70,29 @@ test('a rejected greeting does not permanently mark the listing prompt as sent',
  pipeline.store.db.exec('DELETE FROM conversations');space.getMembers=async()=>[{id:'organizer',name:'A'}];
  let fail=true;space.send=async text=>{if(fail)throw Object.assign(Error('Apple send error 4'),{code:'IMESSAGE_SEND_FAILED'});replies.push(text)};
  await assert.rejects(handler(space,message('first','yo')),/Apple send error 4/);
- fail=false;await handler(space,message('retry','yo'));assert.equal(replies.length,1);assert.match(replies[0],/Send me the Airbnb listing link/);
+ fail=false;await handler(space,message('retry','yo'));assert.equal(replies.length,1);assert.match(replies[0],/Send me the online payment/);
+});
+
+test('StayNest links start intake from text, rich previews, bare domains and trailing slashes',async t=>{
+ const origin='https://leash-staynest-demo.foggylyric64.chatgpt.site';
+ for(const [index,content] of [
+  {type:'text',text:origin+'/malicious'},
+  {type:'app',url:async()=>origin+'/malicious'},
+  {type:'richlink',url:origin+'/malicious.html'},
+  {type:'text',text:origin.replace('https://','')+'/malicious/'},
+  {type:'text',text:origin+'/'},
+ ].entries()){
+  const{pipeline,handler,replies,space,message}=fixture(t);pipeline.store.db.exec('DELETE FROM conversations');space.getMembers=async()=>[{id:'organizer',name:'A'}];
+  let received;pipeline.create=input=>{received=input;return{id:'booking'}};
+  await handler(space,{...message(`link-${index}`),content});
+  assert.equal(received?.listingUrl,index===4?origin+'/legitimate':origin+'/malicious');assert.equal(replies.length,0);
+ }
+});
+test('unsupported links and intake configuration errors receive an explanation instead of silence',async t=>{
+ const{pipeline,handler,replies,space,message}=fixture(t);pipeline.store.db.exec('DELETE FROM conversations');space.getMembers=async()=>[{id:'organizer',name:'A'}];
+ await handler(space,message('unsupported','https://example.com/pay'));
+ assert.match(replies.at(-1),/Other payment sites aren’t supported yet/);
+ pipeline.create=()=>{throw Error('Payment provider configuration is incomplete.')};
+ await handler(space,message('fake','https://leash-staynest-demo.foggylyric64.chatgpt.site/malicious'));
+ assert.match(replies.at(-1),/Payment provider configuration/);
 });

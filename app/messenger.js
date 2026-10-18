@@ -1,3 +1,4 @@
+import {airbnbUrl} from './tokens.js';
 import {renderStatusCard} from './status-card.js';
 import {fingerprint,messageDebug} from './debug.js';
 import {verifyIMessageSend} from './delivery.js';
@@ -170,26 +171,33 @@ export function createChatHandler(pipeline) {
       if(!question||next.status!=='INTAKE')await space.send(next.status==='COLLECTING'?'The final price is ready. I’ve sent everyone their share and a private payment link in iMessage.':next.status==='FAILED'?`I couldn’t finish the listing check: ${next.failure}`:'I’m checking the booking now.');
       return;
     }
-    const match = text.match(/https:\/\/(?:www\.)?airbnb\.com\/rooms\/\d+[^\s]*/i);
-    if (match) draft.listingUrl = match[0];
+    const links=text.match(/(?:https?:\/\/|www\.)[^\s<>]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s<>]*)?/gi)||[];
+    if(links.length){
+      let supported;
+      for(const link of links){try{supported=airbnbUrl(/^https?:\/\//i.test(link)?link:`https://${link}`);break}catch{}}
+      if(!supported){await space.send('I received your link. I can currently process Airbnb listings and the StayNest demo. Other payment sites aren’t supported yet.');return;}
+      draft.listingUrl=supported;
+    }
     const guests = text.match(/\b(\d{1,2})\s*(?:people|guests|attendees|of us)\b/i) || (draft.listingUrl && /^\d{1,2}$/.test(text) ? [text, text] : null);
     if (guests) draft.guests = Number(guests[1]);
     draft.seen.push(message.id); save(spaceId, draft);
     if (!draft.listingUrl) {
       if(!draft.listingPrompted){
         draft.listingPrompted=true;save(spaceId,draft);
-        try{await space.send('I’ll organize the booking and collect everyone’s share. Send me the Airbnb listing link.')}
+        try{await space.send('I’ll organize the booking and collect everyone’s share. Send me the online payment.')}
         catch(error){if(!error.deliveryUnknown){draft.listingPrompted=false;save(spaceId,draft)}throw error}
       }else if(/^(?:yo+|hey|hello|hi|ping|status|help|are you there)[?!.\s]*$/i.test(text)&&Date.now()-(draft.lastListingReminderAt||0)>30000){
         draft.lastListingReminderAt=Date.now();save(spaceId,draft);
-        await space.send('I’m here. I haven’t received the listing URL—paste the Airbnb link as text.');
+        await space.send('I’m here. I haven’t received the listing URL—paste the online payment link as text.');
       }
       return;
     }
     draft.members = (await space.getMembers()).map(m => ({ name: m.name || m.address || m.id, contact: m.address || m.id }));
     draft.guests=draft.members.length;
     draft.members.sort((a, b) => Number(identities.includes(b.contact)) - Number(identities.includes(a.contact)));
-    const booking = pipeline.create({ listingUrl: draft.listingUrl, guests: draft.guests, participants: draft.members, spaceId });
+    let booking;
+    try{booking = pipeline.create({ listingUrl: draft.listingUrl, guests: draft.guests, participants: draft.members, spaceId });}
+    catch(error){await space.send(error.message);return;}
     draft.bookingId = booking.id; save(spaceId, draft);
     await pipeline.advance(booking.id);
   };

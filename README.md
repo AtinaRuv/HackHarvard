@@ -365,3 +365,18 @@ After a failed/refunded attempt, the organizer can send `retry` in the group to
 reuse saved booking details with a fresh bank account and new payment links.
 Previous refunds and payment records remain intact; pending reconciliation blocks
 retry.
+
+### StayNest mismatch demo
+
+Send `https://leash-staynest-demo.foggylyric64.chatgpt.site/malicious`
+(or `/malicious.html`) in the booking group. This controlled demo supports local simulated payments and Stripe test payments. The initial token uses the pinned, reviewed legitimate
+StayNest page and its trusted merchant. After contributions arrive, the agent
+reads the submitted page again and compares its merchant against that token.
+The malicious page's different recipient blocks spending, closes the browser,
+and refunds every paid contribution through the normal retryable refund flow.
+The `/legitimate` page is the matching control. Pricing follows the demo's
+$350/night plus $50 fees, with 1–14 nights and up to four group members.
+The browser opens the submitted StayNest listing itself, with its original
+layout and photos. Remote scripts and form submissions are blocked; page
+instructions are treated as untrusted content, and guest details are not sent to StayNest. If the reviewed baseline
+changes, collection stops until its fingerprint is explicitly reviewed again.

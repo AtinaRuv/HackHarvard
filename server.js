@@ -1,7 +1,28 @@
 // server.js - mounts every adapter, the demo page, and the flow routes. Port 6767.
 require('dotenv/config');
+const os = require('os');
 const path = require('path');
 const express = require('express');
+
+const PORT = Number(process.env.PORT || 6767);
+
+// A judge taps the pay link on their own phone, where "localhost" is the phone.
+// So the links have to carry this laptop's address on the wifi, not localhost.
+// Set APP_BASE_URL yourself to override; otherwise we work it out.
+function lanAddress() {
+    for (const addrs of Object.values(os.networkInterfaces())) {
+        for (const a of addrs || []) {
+            if (a.family === 'IPv4' && !a.internal) return a.address;
+        }
+    }
+    return 'localhost';
+}
+const BASE = `http://${lanAddress()}:${PORT}`;
+// .env may pin these to a stale host or port, which silently breaks the phone demo.
+if (!process.env.APP_BASE_URL || /localhost|127\.0\.0\.1/.test(process.env.APP_BASE_URL)) {
+    process.env.APP_BASE_URL = BASE;
+}
+if (!process.env.PUBLIC_BASE_URL) process.env.PUBLIC_BASE_URL = BASE;
 
 const chat = require('./lib/chat');
 const browser = require('./lib/browser');
@@ -64,7 +85,8 @@ app.get('/', (req, res) => res.redirect('/demo'));
 app.get('/ping', (req, res) => res.send('pong'));
 app.post('/ping', (req, res) => res.send('pong'));
 
-const PORT = Number(process.env.PORT || 6767);
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}  ->  http://localhost:${PORT}/demo`);
+    console.log(`Server running on port ${PORT}`);
+    console.log(`  demo page   ${BASE}/demo`);
+    console.log(`  pay links   ${process.env.APP_BASE_URL}/pay/...  (open these on a phone)`);
 });

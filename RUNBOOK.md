@@ -43,14 +43,20 @@ present, and falls back to the stub on any error rather than taking the demo dow
 
 ## Pay links on a phone
 
-Pay links default to `http://localhost:6767`, which a phone cannot reach. For the
-phone demo, set the laptop's LAN address before starting:
+Handled for you. On startup the server finds this laptop's wifi address and builds the pay
+links from it, because `localhost` on a judge's phone means the phone, not the laptop. The
+startup banner prints the exact address it chose:
 
 ```
-APP_BASE_URL=http://192.168.25.228:6767 PUBLIC_BASE_URL=http://192.168.25.228:6767 npm start
+Server running on port 6767
+  demo page   http://192.168.25.228:6767/demo
+  pay links   http://192.168.25.228:6767/pay/...  (open these on a phone)
 ```
 
-Then the pay links in chat point at the laptop and the judge's phone can open them over wifi.
+The phone must be on the same wifi. The first inbound connection from another device may be
+swallowed by the macOS firewall prompt — allow it, and tap the link again.
+
+To pin a different address, set `APP_BASE_URL` yourself.
 
 ## Routes
 

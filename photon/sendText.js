@@ -1,30 +1,9 @@
-import { Spectrum } from "spectrum-ts";
-import { imessage } from "spectrum-ts/providers/imessage";
-
-// temp account, hardcoded on purpose
-const PROJECT_ID = "7096c3cc-18c6-4229-857a-5adceb37b496";
-const PROJECT_SECRET = "xBInVqN_5jW5GJwR9IES9Sc7i5jGiqsFPHvDigNamlo";
-
-let appPromise;
-function getApp() {
-    appPromise ??= Spectrum({
-        projectId: PROJECT_ID,
-        projectSecret: PROJECT_SECRET,
-        providers: [imessage.config()],
-    });
-    return appPromise;
-}
+import { getPhoton, stopPhoton } from './client.js';
+import 'dotenv/config'
 
 export async function sendText(to, body) {
-    const app = await getApp();
-    const im = imessage(app);
-    const user = await im.user(to);
-    console.log("to:", JSON.stringify(to), "user:", user);
-    const dm = await im.space.create(user);
-    return dm.send(body);
+  if(typeof to!=='string'||typeof body!=='string'||!body)throw new Error('Provide a recipient and message body.');
+  const {im}=await getPhoton();
+  return await (await im.space.create(await im.user(to))).send(body);
 }
-
-// await sendText("+14086570906", "yooo");
-// await (await getApp()).stop();
-
 

@@ -1,0 +1,31 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync,writeFileSync,mkdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {Store} from '../app/store.js';
+import {Bank} from '../app/bank.js';
+import {Payments} from '../app/payments.js';
+import {LiveSessions} from '../app/live.js';
+import {createApplication} from '../server.js';
+import {browserTestMonitor} from '../app/browser-test-monitor.js';
+test('the npm start viewer reads test browser frames without changing the chat database',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'leash-shared-watch-')),testRoot=join(root,'browser-tests');mkdirSync(testRoot);const runId=randomUUID();
+ const chatStore=new Store(join(root,'chat')),testStore=new Store(join(testRoot,runId));
+ const runtime=createApplication({mode:'connected',store:chatStore,bank:new Bank(),payments:new Payments(),browserTestDirectory:testRoot});
+ const server=runtime.app.listen(0,'127.0.0.1');await new Promise(ok=>server.once('listening',ok));
+ t.after(async()=>{server.closeAllConnections();await new Promise(ok=>server.close(ok));chatStore.close();testStore.close();rmSync(root,{recursive:true,force:true})});
+ const base=`http://127.0.0.1:${server.address().port}`;
+ const booking={id:'test-booking',createdAt:new Date().toISOString(),status:'PREPARING',requested:{title:'Browser test'},participants:[],events:[]};testStore.save(booking);
+ const live=new LiveSessions(testStore.directory);live.start(booking.id,'initial');live.frame(booking.id,'initial',{image:Buffer.from('actual-frame'),stage:'Fetching the real listing.'});
+ writeFileSync(join(testRoot,'active.json'),JSON.stringify({runId}));
+ const first=await(await fetch(base+'/api/monitor')).json();assert.equal(first.browserTest,true);assert.equal(first.bookingId,booking.id);assert.equal(first.stage,'Fetching the real listing.');assert.equal(await(await fetch(base+first.frameUrl)).text(),'actual-frame');
+ live.frame(booking.id,'final',{image:Buffer.from('next-frame'),stage:'Filling checkout.'});
+ const next=await(await fetch(base+'/api/monitor')).json();assert.equal(next.stage,'Filling checkout.');assert.equal(await(await fetch(base+next.frameUrl)).text(),'next-frame');assert.deepEqual(chatStore.all(),[]);
+ assert.equal((await fetch(base+'/api/monitor',{headers:{'x-forwarded-for':'1.2.3.4'}})).status,404);
+ chatStore.save({...booking,id:'new-chat',createdAt:new Date(Date.now()+1000).toISOString()});assert.equal((await(await fetch(base+'/api/monitor')).json()).bookingId,'new-chat');
+});
+test('invalid browser-test pointers cannot select an arbitrary database',t=>{
+ const root=mkdtempSync(join(tmpdir(),'leash-watch-pointer-'));t.after(()=>rmSync(root,{recursive:true,force:true}));writeFileSync(join(root,'active.json'),JSON.stringify({runId:'../../other'}));assert.equal(browserTestMonitor(root),null);
+});

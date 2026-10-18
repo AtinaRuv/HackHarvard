@@ -1,0 +1,72 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import Stripe from 'stripe';
+import { mkdtempSync,rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Store } from '../app/store.js';
+import { Payments } from '../app/payments.js';
+import { createApplication } from '../server.js';
+
+test('Stripe raw webhook signature is required; an altered payload cannot trigger funding',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'leash-http-'));const store=new Store(dir);
+  const stripe=new Stripe('sk_test_fixture');const payments=new Payments({mode:'stripe',stripe});
+  const secret='whsec_fixture';payments.event=(body,signature)=>stripe.webhooks.constructEvent(body,signature,secret);
+  const r=createApplication({mode:'demo',store,payments});const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));store.close();rmSync(dir,{recursive:true,force:true})});
+  const url=`http://127.0.0.1:${server.address().port}/webhooks/stripe`;
+  const payload=JSON.stringify({id:'evt_fixture',type:'ignored.event',data:{object:{}}});
+  const signature=stripe.webhooks.generateTestHeaderString({payload,secret});
+  assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','stripe-signature':signature},body:payload})).status,200);
+  assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','stripe-signature':signature},body:payload+' '})).status,400);
+  assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload})).status,400);
+});
+test('there is no web onboarding or dashboard; payment and watch links are private',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'leash-auth-'));const store=new Store(dir);
+  const r=createApplication({mode:'connected',store,payments:new Payments()});const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));store.close();rmSync(dir,{recursive:true,force:true})});
+  const base=`http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(base+'/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,404);
+  assert.equal((await fetch(base+'/api/trip/missing')).status,404);
+  assert.equal((await fetch(base+'/trip/missing')).status,404);
+  assert.equal((await fetch(base+'/watch/missing')).status,404);
+  const home=await fetch(base);assert.match(home.headers.get('content-type'),/text\/plain/);assert.match(await home.text(),/iMessage/);
+  const response=await fetch(base+'/api/share/missing');assert.equal(response.status,404);assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+});
+test('permanent local viewer follows new bookings and exposes initial frames only on the Mac',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'leash-monitor-'));const store=new Store(dir);
+  const r=createApplication({mode:'demo',store});const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+  t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();rmSync(dir,{recursive:true,force:true})});
+  const base=`http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(base+'/watch')).status,200);
+  assert.equal((await(await fetch(base+'/api/monitor')).json()).bookingId,null);
+  const input={listingUrl:'https://www.airbnb.com/rooms/1234',checkIn:'2026-11-14',checkOut:'2026-11-17',participants:[{name:'A',contact:'+15555550101'}]};
+  const b=r.pipeline.create(input);r.live.start(b.id,'initial');r.live.frame(b.id,'initial',{image:Buffer.from('frame'),stage:'Filling booking details.'});
+  store.change(b.id,b=>{b.status='PREPARING'});
+  const current=await(await fetch(base+'/api/monitor')).json();assert.equal(current.bookingId,b.id);assert.ok(current.frameUrl);assert.equal(current.status,'running');
+  assert.equal(await(await fetch(base+current.frameUrl)).text(),'frame');
+  assert.equal((await(await fetch(base+`/api/watch/${b.access}`)).json()).frameUrl,null);
+  const next=r.pipeline.create(input);store.change(next.id,b=>{b.createdAt=new Date(Date.parse(b.createdAt)+1000).toISOString()});
+  assert.equal((await(await fetch(base+'/api/monitor')).json()).bookingId,next.id);
+  assert.equal((await fetch(base+current.frameUrl)).status,404);
+  for(const path of ['/watch','/api/monitor',current.frameUrl])assert.equal((await fetch(base+path,{headers:{'x-forwarded-for':'203.0.113.1'}})).status,404);
+  store.db.exec('DELETE FROM bookings');assert.equal((await(await fetch(base+'/api/monitor')).json()).bookingId,null);
+});
+
+test('watch balance stays funded during payment and drops only after completion',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'leash-balance-')),store=new Store(dir);
+ const r=createApplication({mode:'demo',store});const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+ t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();rmSync(dir,{recursive:true,force:true})});
+ const b=r.pipeline.create({listingUrl:'https://www.airbnb.com/rooms/1234',checkIn:'2026-11-14',checkOut:'2026-11-17',participants:[{name:'Test',contact:'test'}]});
+ const base=`http://127.0.0.1:${server.address().port}`;
+ const details=async()=> (await(await fetch(base+`/api/watch/${b.access}`)).json()).details;
+ store.change(b.id,b=>{b.status='FINALIZING';b.initialToken={totalCents:96000};b.balanceCents=96000});
+ assert.equal((await details()).displayBalanceCents,96000);
+ store.change(b.id,b=>{b.bankSpending={id:'demo-spend'};b.balanceCents=0});
+ let d=await details();assert.equal(d.balanceCents,0);assert.equal(d.displayBalanceCents,96000);
+ const monitor=await(await fetch(base+'/api/monitor')).json();assert.equal(monitor.details.displayBalanceCents,96000);
+ store.change(b.id,b=>{b.status='COMPLETED'});
+ assert.equal((await details()).displayBalanceCents,0);
+ store.change(b.id,b=>{b.status='REFUNDING';b.balanceCents=48000});
+ assert.equal((await details()).displayBalanceCents,48000);
+});

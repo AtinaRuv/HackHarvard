@@ -13,3 +13,17 @@ dist/
 
 # Editor
 .vscode/
+
+# Runtime booking data, screenshots, and local signing key
+data/
+playwright-report/
+test-results/
+.agent.lock/
+.agent.reset.lock/
+
+# Local payment database
+.data/
+
+# Logs and coverage
+*.log
+coverage/

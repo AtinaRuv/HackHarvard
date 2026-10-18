@@ -1,29 +1,44 @@
 {
-    "name": "hackharvard",
-    "version": "1.0.0",
-    "description": "",
-    "main": "server.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "start": "node server.js"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/AtinaRuv/HackHarvard.git"
-    },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
-    "type": "module",
-    "bugs": {
-        "url": "https://github.com/AtinaRuv/HackHarvard/issues"
-    },
-    "homepage": "https://github.com/AtinaRuv/HackHarvard#readme",
-    "dependencies": {
-        "@photon-ai/advanced-imessage": "^2.3.0",
-        "@photon-ai/api": "^0.5.0",
-        "dotenv": "^18.0.8",
-        "express": "^5.3.0",
-        "spectrum-ts": "^12.11.0"
-    }
+  "name": "hackharvard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js daytona/*.test.js nessie/*.test.js stripe/*.test.js payments/*.test.js fraud/*.test.js && node fraud/test_tokens.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test:browser": "node tests/browser.js",
+    "reset": "node scripts/reset.js",
+    "bypass": "node scripts/bypass.js",
+    "bypass_email": "node scripts/bypass.js --email",
+    "bypass_applepay": "node scripts/bypass.js",
+    "photon:status": "node scripts/photon-status.js",
+    "test_browser": "node scripts/test-browser.js",
+    "test_daytona_1": "node scripts/test-daytona-1.js",
+    "test_daytona_2": "node scripts/test-daytona-2.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AtinaRuv/HackHarvard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/AtinaRuv/HackHarvard/issues"
+  },
+  "homepage": "https://github.com/AtinaRuv/HackHarvard#readme",
+  "dependencies": {
+    "@daytonaio/sdk": "^0.225.0",
+    "@photon-ai/advanced-imessage": "^2.3.0",
+    "@photon-ai/api": "^0.5.0",
+    "@photon-ai/voice-ts": "^0.1.0",
+    "cheerio": "^1.2.0",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "playwright": "^1.64.0",
+    "spectrum-ts": "^12.11.0",
+    "stripe": "^23.0.0"
+  }
 }

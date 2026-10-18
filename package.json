@@ -4,8 +4,12 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "test": "node --test stripe/client.test.js stripe/webhook.test.js nessie/client.test.js payments/balance.test.js payments/spend.test.js",
+    "start": "node --env-file=.env server.js",
+    "payments:account": "node --env-file=.env scripts/payment-demo.js account",
+    "payments:status": "node --env-file=.env scripts/payment-demo.js status",
+    "payments:replay": "node --env-file=.env scripts/payment-demo.js replay",
+    "payments:spend": "node --env-file=.env scripts/payment-demo.js spend"
   },
   "repository": {
     "type": "git",
@@ -22,5 +26,8 @@
   "dependencies": {
     "express": "^5.3.0",
     "stripe": "^23.0.0"
+  },
+  "engines": {
+    "node": ">=24.12.0"
   }
 }

@@ -1,6 +1,9 @@
 const express = require('express');
 const paymentRoutes = require('./stripe/routes');
+const { stripeWebhook } = require('./stripe/webhook');
 const app = express();
+// Stripe signature verification needs the untouched bytes, before JSON parsing.
+app.post('/payments/webhook', express.raw({ type: 'application/json', limit: '1mb' }), stripeWebhook);
 app.use(express.json());
 
 

@@ -373,3 +373,84 @@ test('rejects a response that is not an account list', async () => {
     /account list was unexpected/
   );
 });
+const { addContribution } = require('./client');
+const contribution = { accountId: 'account-456', amountCents: 2500, paymentId: 'pi_test_one' };
+
+test('contribution posts 25 simulated dollars for 2500 Stripe cents', async () => {
+  let calls = 0;
+  global.fetch = async (url, options) => {
+    calls++;
+    assert.equal(url.pathname, '/accounts/account-456/deposits');
+    assert.equal(options.method, 'POST');
+    assert.equal(options.redirect, 'error');
+    const body = JSON.parse(options.body);
+    assert.equal(body.amount, 25);
+    assert.equal(body.medium, 'balance');
+    assert.equal(body.status, 'completed');
+    assert.match(body.transaction_date, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(body.description, 'Stripe test contribution pi_test_one');
+    return reply({ objectCreated: { _id: 'deposit-123' } }, 201);
+  };
+  assert.deepEqual(await addContribution(contribution), { depositId: 'deposit-123' });
+  assert.equal(calls, 1);
+});
+
+test('contribution rejects invalid IDs, nonpositive amounts and fractional dollars without a request', async () => {
+  let calls = 0;
+  global.fetch = async () => { calls++; throw new Error('unexpected'); };
+  for (const changes of [{ amountCents: 0 }, { amountCents: -100 }, { amountCents: 2550 }, { amountCents: '2500' }, { accountId: '../other' }, { paymentId: 'not-a-payment' }]) {
+    await assert.rejects(addContribution({ ...contribution, ...changes }));
+  }
+  assert.equal(calls, 0);
+});
+
+test('contribution failures never retry or expose the private URL', async () => {
+  for (const response of [null, reply({}, 500), reply({}, 201), { ok: true, json: async () => { throw new Error('JSON'); } }]) {
+    let calls = 0;
+    global.fetch = async () => {
+      calls++;
+      if (!response) throw new Error('key=fake-test-key');
+      return response;
+    };
+    await assert.rejects(addContribution(contribution), error => {
+      assert.match(error.message, /Review Nessie/);
+      assert.equal(error.message.includes('fake-test-key'), false);
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
+});
+
+const { subtractFromAccount, readAccountDeposits } = require('./client');
+const spendingInput = { accountId: 'account-456', amountCents: 1000, operationId: 'spend-1' };
+test('withdrawal posts ten simulated dollars for 1000 cents', async () => {
+  global.fetch = async (url, options) => {
+    assert.equal(url.pathname, '/accounts/account-456/withdrawals');
+    assert.equal(options.method, 'POST');assert.equal(options.redirect, 'error');
+    const body = JSON.parse(options.body);
+    assert.equal(body.amount, 10);assert.equal(body.status, 'completed');
+    assert.equal(body.description, 'Leash spending spend-1');
+    return reply({ objectCreated: { _id: 'withdrawal-1' } }, 201);
+  };
+  assert.deepEqual(await subtractFromAccount(spendingInput), { withdrawalId: 'withdrawal-1' });
+});
+test('withdrawal rejects invalid amounts and operation IDs without contacting Nessie', async () => {
+  let calls = 0;global.fetch = async () => { calls++;throw new Error('unexpected'); };
+  for (const changes of [{ amountCents: 0 }, { amountCents: -100 }, { amountCents: 1050 }, { operationId: '../x' }, { accountId: '' }]) {
+    await assert.rejects(subtractFromAccount({ ...spendingInput, ...changes }));
+  }
+  assert.equal(calls, 0);
+});
+test('withdrawal failures do not retry or expose secrets', async () => {
+  for (const response of [null, reply({}, 400), reply({}, 201)]) {
+    let calls = 0;global.fetch = async () => { calls++;if (!response) throw new Error('fake-test-key');return response; };
+    await assert.rejects(subtractFromAccount(spendingInput), error => { assert.match(error.message, /Review Nessie/);assert.equal(error.message.includes('fake-test-key'), false);return true; });
+    assert.equal(calls, 1);
+  }
+});
+test('reads account deposits and rejects invalid responses', async () => {
+  global.fetch = async url => { assert.equal(url.pathname, '/accounts/account-456/deposits');return reply([]); };
+  assert.deepEqual(await readAccountDeposits('account-456'), []);
+  global.fetch = async () => reply({});
+  await assert.rejects(readAccountDeposits('account-456'), /No spending was started/);
+});

@@ -3,6 +3,7 @@ const {
   createParticipantCheckout,
 } = require('./client');
 
+const { openPaymentStore } = require('../payments/store');
 const router = express.Router();
 
 // This fixed record stands in for the team's booking database.
@@ -53,7 +54,21 @@ router.post('/demo/checkout', async (req, res) => {
 
   try {
     if (!checkoutPromise) {
-      checkoutPromise = createParticipantCheckout(demoShare);
+      checkoutPromise = (async () => {
+        const accountId = process.env.NESSIE_ACCOUNT_ID;
+        if (!accountId) throw new Error('Set NESSIE_ACCOUNT_ID to the booking account before checkout.');
+        // A fresh ID avoids reusing the checkout paid during chunk 2.
+        const attempt = process.env.DEMO_PAYMENT_ATTEMPT_ID || 'demo-chunk3-001';
+        const share = { ...demoShare, accountId, shareId: `${attempt}-share`, paymentAttemptId: attempt };
+        const store = openPaymentStore();
+        try {
+          const saved = store.register(share);
+          if (saved.sessionId) return { sessionId: saved.sessionId, checkoutUrl: saved.checkoutUrl };
+          const checkout = await createParticipantCheckout(share);
+          store.bindCheckout(share.shareId, checkout);
+          return checkout;
+        } finally { store.close(); }
+      })();
     }
 
     const checkout = await checkoutPromise;

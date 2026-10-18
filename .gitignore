@@ -13,3 +13,6 @@ dist/
 
 # Editor
 .vscode/
+
+# Local payment ledger (keep across server restarts)
+.data/

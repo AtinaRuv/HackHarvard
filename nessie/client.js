@@ -178,3 +178,96 @@ async function createBookingAccount({ customerId, nickname } = {}) {
 // Makes the function available to our server and test file.
 module.exports = { createBookingAccount };
 
+
+// Called only after the backend verifies Stripe and claims the contribution.
+// Nessie is a simulation: this records a deposit, not a Stripe funds transfer.
+async function addContribution({ accountId, amountCents, paymentId } = {}) {
+  if (typeof accountId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(accountId) ||
+      typeof paymentId !== 'string' || !/^pi_[A-Za-z0-9_]+$/.test(paymentId)) {
+    throw new Error('Provide valid account and Stripe payment IDs.');
+  }
+  if (!Number.isSafeInteger(amountCents) || amountCents < 100 ||
+      amountCents > 99_999_999 || amountCents % 100 !== 0) {
+    throw new Error('Nessie contributions must use positive whole USD dollars in cents.');
+  }
+  const apiKey = process.env.NESSIE_API_KEY;
+  const baseUrl = process.env.NESSIE_BASE_URL;
+  if (!apiKey || !baseUrl) throw new Error('Set NESSIE_API_KEY and NESSIE_BASE_URL.');
+  const url = new URL(baseUrl);
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Use a credential-free HTTPS Nessie URL.');
+  url.pathname = `${url.pathname.replace(/\/$/, '')}/accounts/${encodeURIComponent(accountId)}/deposits`;
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('key', apiKey);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        medium: 'balance', transaction_date: new Date().toISOString().slice(0, 10),
+        status: 'completed', amount: amountCents / 100,
+        description: `Stripe test contribution ${paymentId}`,
+      }),
+      signal: AbortSignal.timeout(10_000), redirect: 'error',
+    });
+    if (!response.ok) throw new Error('Nessie rejected the deposit.');
+    const result = await response.json();
+    const depositId = result?.objectCreated?._id || result?._id;
+    if (typeof depositId !== 'string' || !depositId.trim()) throw new Error('Missing deposit ID.');
+    return { depositId };
+  } catch {
+    // No automatic POST retry: even a timeout might have created the deposit.
+    throw new Error('Could not confirm Nessie deposit. Review Nessie before retrying.');
+  }
+}
+module.exports.addContribution = addContribution;
+
+async function readAccountDeposits(accountId) {
+  const url = nessieAccountUrl(accountId, 'deposits');
+  try {
+    const response = await fetch(url, { headers: { Accept: 'application/json' },
+      redirect: 'error', signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw new Error('Rejected');
+    const deposits = await response.json();
+    if (!Array.isArray(deposits)) throw new Error('Expected deposits');
+    return deposits;
+  } catch { throw new Error('Could not read Nessie deposits. No spending was started.'); }
+}
+
+function nessieAccountUrl(accountId, resource) {
+  if (typeof accountId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(accountId)) throw new Error('Invalid Nessie account ID.');
+  if (!process.env.NESSIE_BASE_URL || !process.env.NESSIE_API_KEY) throw new Error('Configure Nessie settings.');
+  const url = new URL(process.env.NESSIE_BASE_URL);
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Use a credential-free HTTPS Nessie URL.');
+  url.pathname = `${url.pathname.replace(/\/$/, '')}/accounts/${encodeURIComponent(accountId)}/${resource}`;
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('key', process.env.NESSIE_API_KEY);
+  return url;
+}
+
+// Internal low-level helper. Call through payments/spend.js so funds are reserved.
+async function subtractFromAccount({ accountId, amountCents, operationId } = {}) {
+  if (!Number.isSafeInteger(amountCents) || amountCents < 100 || amountCents > 99_999_999 || amountCents % 100 !== 0) {
+    throw new Error('Spending must use positive whole USD dollars in cents.');
+  }
+  if (typeof operationId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(operationId)) throw new Error('Invalid spending operation ID.');
+  const url = nessieAccountUrl(accountId, 'withdrawals');
+  try {
+    const response = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ medium: 'balance', transaction_date: new Date().toISOString().slice(0, 10),
+        status: 'completed', amount: amountCents / 100, description: `Leash spending ${operationId}` }),
+      redirect: 'error', signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error('Rejected');
+    const result = await response.json();
+    const withdrawalId = result?.objectCreated?._id || result?._id;
+    if (typeof withdrawalId !== 'string' || !withdrawalId.trim()) throw new Error('Missing withdrawal ID');
+    return { withdrawalId };
+  } catch {
+    throw new Error('Could not confirm Nessie withdrawal. Review Nessie before retrying.');
+  }
+}
+module.exports.readAccountDeposits = readAccountDeposits;
+module.exports.subtractFromAccount = subtractFromAccount;

@@ -1,4 +1,5 @@
 const express = require('express');
+const paymentRoutes = require('./stripe/routes');
 const app = express();
 app.use(express.json());
 
@@ -24,8 +25,7 @@ app.post('/ping', (req, res) => res.send("pong"));
 
 // ——— STRIPE —————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-// 
-
+app.use('/payments', paymentRoutes);
 
 // ——— FRAUD —————————————————————————————————————————————————————————————————————————————————————————————————————————
 

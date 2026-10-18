@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Group Booking Demo</title>
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel-bg: #11151c;
+    --panel-bg-2: #161b24;
+    --border: #262c38;
+    --text: #f3f6fa;
+    --text-dim: #8b94a7;
+    --text-dim-2: #5f6678;
+    --accent: #4d8dff;
+    --accent-dim: #2a3a5c;
+
+    --out-bg: #2f5fd6;
+    --out-text: #ffffff;
+    --in-bg: #232a38;
+    --in-text: #eef1f7;
+
+    --ok-bg: #0f3d23;
+    --ok-fg: #39e67f;
+    --ok-border: #1d7a44;
+
+    --warn-bg: #3d2f0a;
+    --warn-fg: #ffc94d;
+    --warn-border: #8a6a16;
+
+    --block-bg: #3d1414;
+    --block-fg: #ff6b6b;
+    --block-border: #8a2222;
+
+    --none-bg: #1b1f29;
+    --none-fg: #8b94a7;
+    --none-border: #2d333f;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 18px;
+    line-height: 1.45;
+    overflow: hidden;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ---------- top bar ---------- */
+  #topbar {
+    flex: 0 0 auto;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  #topbar h1 {
+    font-size: 22px;
+    margin: 0;
+    margin-right: 8px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+
+  .runbtn {
+    font-size: 17px;
+    font-weight: 600;
+    padding: 14px 20px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--panel-bg-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  .runbtn:hover { background: #1c2230; }
+  .runbtn:active { transform: scale(0.97); }
+  .runbtn.happy { border-color: var(--ok-border); }
+  .runbtn.happy:hover { background: var(--ok-bg); color: var(--ok-fg); }
+  .runbtn.attack { border-color: var(--block-border); }
+  .runbtn.attack:hover { background: var(--block-bg); color: var(--block-fg); }
+  .runbtn.scam { border-color: var(--warn-border); }
+  .runbtn.scam:hover { background: var(--warn-bg); color: var(--warn-fg); }
+
+  #statusline {
+    margin-left: auto;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    font-size: 16px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  #statusline b { color: var(--text); font-weight: 700; }
+  .dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: var(--text-dim-2);
+    vertical-align: middle;
+  }
+  .dot.open { background: var(--ok-fg); box-shadow: 0 0 6px var(--ok-fg); }
+  .dot.connecting { background: var(--warn-fg); box-shadow: 0 0 6px var(--warn-fg); }
+  .dot.error { background: var(--block-fg); box-shadow: 0 0 6px var(--block-fg); }
+
+  /* ---------- main 3-column grid ---------- */
+  #main {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr 1.35fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .col {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .col-header {
+    flex: 0 0 auto;
+    padding: 14px 20px 10px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .col-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  /* ---------- CHAT column ---------- */
+  #chatLog {
+    padding: 16px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .msg { max-width: 82%; display: flex; flex-direction: column; }
+  .msg-in { align-self: flex-start; align-items: flex-start; }
+  .msg-out { align-self: flex-end; align-items: flex-end; }
+
+  .msg-from {
+    font-size: 13px;
+    color: var(--text-dim-2);
+    margin-bottom: 3px;
+    padding: 0 4px;
+  }
+
+  .msg-text {
+    padding: 11px 15px;
+    border-radius: 16px;
+    font-size: 18px;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .msg-in .msg-text { background: var(--in-bg); color: var(--in-text); border-bottom-left-radius: 4px; }
+  .msg-out .msg-text { background: var(--out-bg); color: var(--out-text); border-bottom-right-radius: 4px; }
+  .msg-text a { color: #cfe0ff; text-decoration: underline; }
+  .msg-out .msg-text a { color: #ffffff; }
+
+  #chatInputRow {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 10px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--panel-bg);
+  }
+  #chatInput {
+    flex: 1 1 auto;
+    font-size: 18px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-bg-2);
+    color: var(--text);
+  }
+  #chatInput:focus { outline: 2px solid var(--accent); }
+  #chatSend {
+    font-size: 17px;
+    font-weight: 600;
+    padding: 12px 22px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  #chatSend:hover { background: #3d7af0; }
+
+  /* ---------- AGENT column ---------- */
+  #agentCol { }
+  #stepsPanel {
+    flex: 0 0 38%;
+    overflow-y: auto;
+    padding: 14px 18px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 15px;
+  }
+  .step-line {
+    padding: 4px 0;
+    color: #c6cedc;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .step-line.state-line { color: var(--text-dim); font-style: italic; }
+  #iframeWrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 14px 18px;
+  }
+  #pageFrame {
+    flex: 1 1 auto;
+    width: 100%;
+    border: 3px solid var(--accent-dim);
+    border-radius: 8px;
+    background: #fff;
+    min-height: 0;
+  }
+  #pageUrlCaption {
+    flex: 0 0 auto;
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--text-dim);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
+  }
+
+  /* ---------- LEDGER column ---------- */
+  #ledgerBody { padding: 20px; }
+
+  .ledger-section { margin-bottom: 28px; }
+  .ledger-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  #balanceFigure {
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: #fff;
+    line-height: 1;
+  }
+  #balanceTotal { color: var(--text-dim); font-size: 16px; margin-top: 6px; }
+
+  .member-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 18px;
+  }
+  .member-check {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex: 0 0 auto;
+  }
+  .member-check.paid { background: var(--ok-bg); color: var(--ok-fg); border: 1px solid var(--ok-border); }
+  .member-check.unpaid { background: var(--none-bg); color: var(--text-dim-2); border: 1px solid var(--border); }
+  .member-name { flex: 1 1 auto; }
+  .member-share { color: var(--text-dim); font-size: 16px; }
+
+  .kv-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 16px;
+  }
+  .kv-key { color: var(--text-dim); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .kv-val { color: var(--text); font-weight: 600; word-break: break-all; text-align: right; }
+
+  .verdict-banner {
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid var(--none-border);
+    background: var(--none-bg);
+  }
+  .verdict-banner.verdict-ok { background: var(--ok-bg); border-color: var(--ok-border); }
+  .verdict-banner.verdict-warn { background: var(--warn-bg); border-color: var(--warn-border); }
+  .verdict-banner.verdict-block { background: var(--block-bg); border-color: var(--block-border); }
+
+  #verdictStatus {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .verdict-ok #verdictStatus, .verdict-banner.verdict-ok #verdictStatus { color: var(--ok-fg); }
+  .verdict-banner.verdict-warn #verdictStatus { color: var(--warn-fg); }
+  .verdict-banner.verdict-block #verdictStatus { color: var(--block-fg); }
+  .verdict-banner.verdict-none #verdictStatus { color: var(--none-fg); }
+
+  #verdictReasons { margin-top: 10px; font-size: 16px; color: var(--text); }
+  .reason-line { padding: 3px 0; }
+  .reason-line::before { content: "- "; color: var(--text-dim); }
+
+  .dim { color: var(--text-dim-2); font-size: 16px; }
+
+  /* scrollbars - subtle, dark */
+  .col-body::-webkit-scrollbar, #stepsPanel::-webkit-scrollbar { width: 10px; }
+  .col-body::-webkit-scrollbar-thumb, #stepsPanel::-webkit-scrollbar-thumb {
+    background: #2a3140; border-radius: 6px;
+  }
+  .col-body::-webkit-scrollbar-track, #stepsPanel::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>Group Booking Demo</h1>
+    <button class="runbtn happy" id="btnHappy">Run happy path</button>
+    <button class="runbtn attack" id="btnAttack">Run attack</button>
+    <button class="runbtn scam" id="btnScam">Scam listing check</button>
+    <div id="statusline">
+      <span>Group: <b id="groupIdLabel">-</b></span>
+      <span><span class="dot" id="connDot"></span>Connection: <b id="connLabel">idle</b></span>
+    </div>
+  </div>
+
+  <div id="main">
+    <div class="col" id="chatCol">
+      <div class="col-header">Chat</div>
+      <div class="col-body" id="chatLogWrap">
+        <div id="chatLog"></div>
+      </div>
+      <div id="chatInputRow">
+        <input id="chatInput" type="text" placeholder="Type a message as the group..." autocomplete="off" />
+        <button id="chatSend">Send</button>
+      </div>
+    </div>
+
+    <div class="col" id="agentCol">
+      <div class="col-header">Agent<span id="stateBadgeWrap" style="font-weight:400;">state: <b id="stateBadge" style="color:var(--text);">-</b></span></div>
+      <div id="stepsPanel"></div>
+      <div id="iframeWrap">
+        <iframe id="pageFrame" title="Bot's current page"></iframe>
+        <div id="pageUrlCaption">No page loaded yet</div>
+      </div>
+    </div>
+
+    <div class="col" id="ledgerCol">
+      <div class="col-header">Ledger</div>
+      <div class="col-body" id="ledgerBody">
+        <div class="ledger-section">
+          <div class="ledger-label">Balance</div>
+          <div id="balanceFigure">-</div>
+          <div id="balanceTotal"></div>
+        </div>
+        <div class="ledger-section">
+          <div class="ledger-label">Members</div>
+          <div id="membersList"><div class="dim">No members yet</div></div>
+        </div>
+        <div class="ledger-section">
+          <div class="ledger-label">Approved booking fields</div>
+          <div id="tokenTable"></div>
+        </div>
+        <div class="ledger-section">
+          <div class="ledger-label">Fraud verdict</div>
+          <div class="verdict-banner verdict-none" id="verdictBanner">
+            <div id="verdictStatus">No verdict yet</div>
+            <div id="verdictReasons"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DASH = '—';
+
+  function dash(v) {
+    if (v === undefined || v === null || v === '') return DASH;
+    return v;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var URL_RE = /(https?:\/\/[^\s<]+)/g;
+  function linkify(escaped) {
+    return escaped.replace(URL_RE, function (url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+    });
+  }
+
+  function formatCents(cents) {
+    if (typeof cents !== 'number' || isNaN(cents)) return DASH;
+    var neg = cents < 0;
+    var v = (Math.abs(cents) / 100).toFixed(2);
+    return (neg ? '-$' : '$') + v;
+  }
+
+  // ---- DOM refs ----
+  var chatLog = document.getElementById('chatLog');
+  var chatLogWrap = document.getElementById('chatLogWrap');
+  var chatInput = document.getElementById('chatInput');
+  var chatSend = document.getElementById('chatSend');
+
+  var stepsPanel = document.getElementById('stepsPanel');
+  var pageFrame = document.getElementById('pageFrame');
+  var pageUrlCaption = document.getElementById('pageUrlCaption');
+  var stateBadge = document.getElementById('stateBadge');
+
+  var balanceFigure = document.getElementById('balanceFigure');
+  var balanceTotal = document.getElementById('balanceTotal');
+  var membersList = document.getElementById('membersList');
+  var tokenTable = document.getElementById('tokenTable');
+  var verdictBanner = document.getElementById('verdictBanner');
+  var verdictStatus = document.getElementById('verdictStatus');
+  var verdictReasons = document.getElementById('verdictReasons');
+
+  var groupIdLabel = document.getElementById('groupIdLabel');
+  var connDot = document.getElementById('connDot');
+  var connLabel = document.getElementById('connLabel');
+
+  var btnHappy = document.getElementById('btnHappy');
+  var btnAttack = document.getElementById('btnAttack');
+  var btnScam = document.getElementById('btnScam');
+
+  // ---- app state ----
+  var activeGroupId = 'demo';
+  var es = null;
+  var ledgerState = { balanceCents: null, total: null, members: [], token: {}, verdict: null };
+
+  function setConnState(s) {
+    connLabel.textContent = s;
+    connDot.className = 'dot ' + (s === 'open' ? 'open' : (s === 'connecting' ? 'connecting' : (s === 'error' ? 'error' : '')));
+  }
+
+  function connect(groupId) {
+    if (es) {
+      try { es.close(); } catch (e) {}
+      es = null;
+    }
+    setConnState('connecting');
+    es = new EventSource('/events/' + encodeURIComponent(groupId));
+    es.onopen = function () { setConnState('open'); };
+    es.onerror = function () { setConnState('error (retrying)'); };
+    es.onmessage = function (e) {
+      var evt;
+      try { evt = JSON.parse(e.data); } catch (err) { return; }
+      handleEvent(evt);
+    };
+  }
+
+  function switchGroup(groupId) {
+    activeGroupId = groupId;
+    groupIdLabel.textContent = groupId;
+    connect(groupId);
+  }
+
+  // ---- renderers ----
+  function addChatMessage(evt) {
+    var dir = evt.dir === 'out' ? 'out' : 'in';
+    var text = dash(evt.text);
+    var from = (evt.from === undefined || evt.from === null || evt.from === '') ? null : evt.from;
+    var div = document.createElement('div');
+    div.className = 'msg msg-' + dir;
+    var html = '';
+    if (from) html += '<div class="msg-from">' + escapeHtml(String(from)) + '</div>';
+    html += '<div class="msg-text">' + linkify(escapeHtml(String(text))) + '</div>';
+    div.innerHTML = html;
+    chatLog.appendChild(div);
+    chatLogWrap.scrollTop = chatLogWrap.scrollHeight;
+  }
+
+  function addStep(text, isState) {
+    var div = document.createElement('div');
+    div.className = 'step-line' + (isState ? ' state-line' : '');
+    div.textContent = String(dash(text));
+    stepsPanel.appendChild(div);
+    stepsPanel.scrollTop = stepsPanel.scrollHeight;
+  }
+
+  function setPage(url) {
+    pageUrlCaption.textContent = dash(url);
+    if (url) {
+      try { pageFrame.src = url; } catch (e) {}
+    }
+  }
+
+  function renderLedger() {
+    balanceFigure.textContent = ledgerState.balanceCents != null ? formatCents(ledgerState.balanceCents) : DASH;
+    balanceTotal.textContent = ledgerState.total != null ? ('of ' + formatCents(ledgerState.total) + ' total') : '';
+
+    if (!ledgerState.members || ledgerState.members.length === 0) {
+      membersList.innerHTML = '<div class="dim">No members yet</div>';
+    } else {
+      membersList.innerHTML = ledgerState.members.map(function (m) {
+        var name = dash(m && m.name);
+        var share = (m && typeof m.share === 'number') ? formatCents(m.share) : DASH;
+        var paid = !!(m && m.paid);
+        return '<div class="member-row">' +
+          '<span class="member-check ' + (paid ? 'paid' : 'unpaid') + '">' + (paid ? '✓' : '○') + '</span>' +
+          '<span class="member-name">' + escapeHtml(String(name)) + '</span>' +
+          '<span class="member-share">' + share + '</span>' +
+          '</div>';
+      }).join('');
+    }
+  }
+
+  var TOKEN_FIELDS = ['listingId', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'currency'];
+  function renderToken() {
+    tokenTable.innerHTML = TOKEN_FIELDS.map(function (f) {
+      var v = ledgerState.token ? ledgerState.token[f] : undefined;
+      v = dash(v);
+      return '<div class="kv-row"><span class="kv-key">' + escapeHtml(f) + '</span><span class="kv-val">' + escapeHtml(String(v)) + '</span></div>';
+    }).join('');
+  }
+
+  function renderVerdict() {
+    if (!ledgerState.verdict) {
+      verdictBanner.className = 'verdict-banner verdict-none';
+      verdictStatus.textContent = 'No verdict yet';
+      verdictReasons.innerHTML = '';
+      return;
+    }
+    var status = ledgerState.verdict.status;
+    var cls = status === 'OK' ? 'verdict-ok' : status === 'WARN' ? 'verdict-warn' : status === 'BLOCK' ? 'verdict-block' : 'verdict-none';
+    verdictBanner.className = 'verdict-banner ' + cls;
+    verdictStatus.textContent = String(dash(status));
+    var reasons = Array.isArray(ledgerState.verdict.reasons) ? ledgerState.verdict.reasons : [];
+    if (reasons.length === 0) {
+      verdictReasons.innerHTML = '<div class="dim">No reasons given</div>';
+    } else {
+      verdictReasons.innerHTML = reasons.map(function (r) {
+        return '<div class="reason-line">' + escapeHtml(String(r)) + '</div>';
+      }).join('');
+    }
+  }
+
+  function handleEvent(evt) {
+    if (!evt || typeof evt !== 'object' || !evt.type) return;
+    try {
+      switch (evt.type) {
+        case 'chat':
+          addChatMessage(evt);
+          break;
+        case 'step':
+          addStep(evt.text);
+          break;
+        case 'page':
+          setPage(evt.url);
+          break;
+        case 'ledger':
+          ledgerState.balanceCents = (typeof evt.balanceCents === 'number') ? evt.balanceCents : null;
+          ledgerState.total = (typeof evt.total === 'number') ? evt.total : null;
+          ledgerState.members = Array.isArray(evt.members) ? evt.members : [];
+          renderLedger();
+          break;
+        case 'token':
+          ledgerState.token = (evt.fields && typeof evt.fields === 'object') ? evt.fields : {};
+          renderToken();
+          break;
+        case 'verdict':
+          ledgerState.verdict = { status: evt.status, reasons: evt.reasons };
+          renderVerdict();
+          break;
+        case 'state':
+          stateBadge.textContent = String(dash(evt.state));
+          addStep('[state] ' + dash(evt.state), true);
+          break;
+        default:
+          // Unknown event type: tolerate silently, just note it in the step log.
+          addStep('[unknown event: ' + dash(evt.type) + ']', true);
+      }
+    } catch (err) {
+      // A malformed event must never break the page.
+      addStep('[error rendering event: ' + err.message + ']', true);
+    }
+  }
+
+  function clearPanels() {
+    chatLog.innerHTML = '';
+    stepsPanel.innerHTML = '';
+    pageFrame.src = 'about:blank';
+    pageUrlCaption.textContent = 'No page loaded yet';
+    stateBadge.textContent = DASH;
+    ledgerState = { balanceCents: null, total: null, members: [], token: {}, verdict: null };
+    renderLedger();
+    renderToken();
+    renderVerdict();
+  }
+
+  function runPath(url, groupId) {
+    clearPanels();
+    switchGroup(groupId);
+    fetch(url, { method: 'POST' }).catch(function (err) {
+      addStep('Failed to start run: ' + err.message, true);
+    });
+  }
+
+  btnHappy.addEventListener('click', function () { runPath('/run/demo', 'demo'); });
+  btnAttack.addEventListener('click', function () { runPath('/run/demo2?attack=1', 'demo2'); });
+  btnScam.addEventListener('click', function () { runPath('/run/demo3?scam=1', 'demo3'); });
+
+  function sendMessage() {
+    var text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    fetch('/webhook/photon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId: activeGroupId, from: 'demo', text: text })
+    }).catch(function (err) {
+      addStep('Failed to send message: ' + err.message, true);
+    });
+  }
+
+  chatSend.addEventListener('click', sendMessage);
+  chatInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // initial state
+  renderLedger();
+  renderToken();
+  renderVerdict();
+  groupIdLabel.textContent = activeGroupId;
+  connect(activeGroupId);
+})();
+</script>
+</body>
+</html>

@@ -69,6 +69,7 @@ async function readPageInSandbox(url, offline, approvedHosts, fetchHtml, inspect
   let failureCode;
   let blockedRequests = 0;
   let httpRefresh = false;
+  let documentSha256 = null;
   let stage = "Browser startup";
   const outcome = { data: null, errors: [] };
 
@@ -137,6 +138,7 @@ async function readPageInSandbox(url, offline, approvedHosts, fetchHtml, inspect
             if (charset && !/^(utf-8|utf8|us-ascii)$/i.test(charset)) throw new Error("Unsupported HTML encoding.");
             const html = new TextDecoder("utf-8", { fatal: true }).decode(response.body);
             if (/<link\b/i.test(html)) throw new Error("Link elements require unsupported network behavior; inspection is inconclusive.");
+            documentSha256 = require('node:crypto').createHash('sha256').update(response.body).digest('hex');
           }
           await route.fulfill({ status: 200, body: response.body, contentType: inspection ? "text/html; charset=utf-8" : response.contentType,
             headers: { "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-src 'none'",
@@ -164,7 +166,7 @@ async function readPageInSandbox(url, offline, approvedHosts, fetchHtml, inspect
       finalUrl: page.url(),
       title: (await page.title()).slice(0, 500),
       ...extracted,
-      ...(inspection ? { blockedRequests, httpRefresh } : {}),
+      ...(inspection ? { blockedRequests, httpRefresh, documentSha256 } : {}),
     };
     if (navigationError) throw new Error(navigationError);
   } catch (error) {

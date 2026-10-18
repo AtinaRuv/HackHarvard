@@ -55,6 +55,18 @@ function extractPage(root, inspection) {
     facts[name] = values.length === 1 ? values[0] : null;
     if (values.length > 1) ambiguousFields.push(name);
   }
+  // A merchant identifier is an observed page claim, never authorization.
+  // Accept only one small, inert JSON record. Never evaluate page scripts.
+  const records = root.querySelectorAll('[data-booking="merchantId"]');
+  facts.merchantId = null;
+  if (records.length === 1 && records[0].tagName === 'SCRIPT' &&
+      records[0].getAttribute('type') === 'application/json' && records[0].textContent.length <= 512) {
+    try {
+      const id = JSON.parse(records[0].textContent).merchantId;
+      if (typeof id === 'string' && /^[A-Z0-9_-]{1,80}$/.test(id)) facts.merchantId = id;
+    } catch { /* Malformed metadata remains unknown. */ }
+  }
+  if (records.length > 1) ambiguousFields.push('merchantId');
   return { scan, facts, ambiguousFields };
 }
 
@@ -81,7 +93,7 @@ function normalizedText(value) {
 function emptyDetails(url = null) {
   return { propertyName: null, listingUrl: url, address: null, checkIn: null, checkOut: null, guests: null,
     roomType: null, displayedPrice: null, totalPrice: null, currency: null, priceBasis: null,
-    taxesAndFees: null, cancellationPolicy: null, availability: null };
+    taxesAndFees: null, cancellationPolicy: null, availability: null, merchantId: null };
 }
 
 function failedInspection(url, status, type, description) {
@@ -153,10 +165,14 @@ function assessPage(url, page) {
   details.guests = /^[1-9]\d?$|^100$/.test(raw.guests || "") ? Number(raw.guests) : null;
   details.currency = /^[A-Z]{3}$/.test(raw.currency || "") ? raw.currency : null;
   details.displayedPrice = /^(0|[1-9]\d{0,6})(\.\d{1,2})?$/.test(raw.price || "") ? Number(raw.price) : null;
-  details.priceBasis = ["total_group_stay", "per_night", "per_person"].includes(raw.priceBasis) ? raw.priceBasis : null;
+  const priceBasis = raw.priceBasis === 'Total for your group' ? 'total_group_stay' : raw.priceBasis;
+  details.priceBasis = ["total_group_stay", "per_night", "per_person"].includes(priceBasis) ? priceBasis : null;
   details.totalPrice = details.priceBasis === "total_group_stay" && details.currency ? details.displayedPrice : null;
   details.availability = ["available", "unavailable", "request_only"].includes(raw.availability) ? raw.availability : null;
-  const missingFields = Object.entries(details).filter(([, value]) => value === null).map(([key]) => key);
+  details.merchantId = typeof raw.merchantId === 'string' && /^[A-Z0-9_-]{1,80}$/.test(raw.merchantId) ? raw.merchantId : null;
+  // Merchant metadata is optional for existing inspection clients. The demo's
+  // separate backend gate requires it; absence can never approve a payment.
+  const missingFields = Object.entries(details).filter(([key, value]) => key !== 'merchantId' && value === null).map(([key]) => key);
   const complete = !scan.truncated && !dynamic && !missingFields.length && !page.ambiguousFields.length;
   return { url, status: scan.truncated || dynamic || missingFields.length ? "inconclusive" : "inspected",
     dataTrust: "untrusted_page_claims", bookingDetails: details, safeToProceed: false,

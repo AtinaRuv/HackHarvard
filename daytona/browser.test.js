@@ -157,7 +157,19 @@ test("browser worker uses the DOM extraction function on controlled booking fiel
   assert.equal(outcome.data.facts.propertyName, "Leash Fixture Hotel");
   assert.equal(outcome.data.facts.currency, "USD");
   assert.equal(outcome.data.scan.activeScripts, 0);
+  assert.equal(outcome.data.documentSha256, require('node:crypto').createHash('sha256').update(fixtureHtml).digest('hex'));
   assert.deepEqual(browser.closed, ["context", "browser"]);
+});
+
+test('document fingerprint comes from fetched bytes, not a page-supplied hash', async () => {
+  const html = fixtureHtml.replace('</body>', '<p data-document-sha256="' + 'a'.repeat(64) + '">Page claim</p></body>');
+  const browser = loadBrowser({ body: fixtureRoot(html), url: fixtureUrl });
+  const outcome = await browser.readPage(fixtureUrl, false, ['hotels.example.com'],
+    async () => ({ body: Buffer.from(html), contentType: 'text/html' }), true);
+  assert.equal(outcome.errors.length, 0);
+  assert.equal(outcome.data.documentSha256, require('node:crypto').createHash('sha256').update(html).digest('hex'));
+  assert.notEqual(outcome.data.documentSha256, 'a'.repeat(64));
+  assert.deepEqual(browser.closed, ['context', 'browser']);
 });
 
 test("inspection refuses speculative-link HTML and non-UTF8 documents before rendering", async () => {

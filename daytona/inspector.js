@@ -5,7 +5,13 @@ const { assessPage, failedInspection } = require("./analysis");
 async function inspectInSandbox(sandbox, url, browser) {
   const page = await browser.interactWithBrowser(sandbox, url, { inspection: true });
   if (page.finalUrl !== url) return failedInspection(url, "blocked", "navigation_policy", "Unexpected final URL; the page cannot be trusted.");
-  return assessPage(url, page);
+  const result = assessPage(url, page);
+  // Computed by our remote worker from the exact bytes given to Chromium,
+  // never read from a page-provided hash or token.
+  if (/^[a-f0-9]{64}$/.test(page.documentSha256 || '')) {
+    result.evidence = { documentSha256: page.documentSha256, browserClosed: true, sandboxDeleted: false };
+  }
+  return result;
 }
 
 // Only the first argument is the public API; optional dependencies are for local tests.
@@ -36,7 +42,10 @@ async function inspectBookingUrl(input, { browser: injected, approvedUrls } = {}
     }
   } finally {
     if (sandbox) {
-      try { await browser.deleteSandbox(sandbox); }
+      try {
+        await browser.deleteSandbox(sandbox);
+        if (result?.evidence) result.evidence.sandboxDeleted = true;
+      }
       catch {
         result = result || failedInspection(url, "inconclusive", "inspection_failed", "Inspection did not complete.");
         result.status = result.security.status = "inconclusive";

@@ -1,5 +1,8 @@
 # Leash Daytona booking-page security inspection
 
+For the paired fictional rental website, local preview, tests, hosting setup,
+and current funding-policy limitations, see [StayNest demo](staynest/README.md).
+
 Daytona is an isolated, read-only browser boundary for the booking agent.
 It inspects a specific, approved booking URL and returns typed **untrusted page
 claims** plus a security assessment. It does not search for hotels, reserve,
@@ -27,15 +30,22 @@ The JSON-compatible result includes:
 - Fixed-description `findings`, missing fields, coverage and limitations.
 - `bookingDetails`: property name, validated listing URL, address, dates, guest
   count, room type, displayed price/currency/basis, total price, taxes/fees,
-  cancellation policy and availability claim. Missing or conflicting facts are
+  cancellation policy, availability claim, and an optional page-claimed merchant ID. Missing or conflicting facts are
   null. Nothing is verified inventory or payment authorization.
 - `dataTrust: "untrusted_page_claims"` and **`safeToProceed: false`**.
 
-**This version never automatically opens the booking gate**, including a clean,
+**The general inspector never automatically opens the booking gate**, including a clean,
 complete fixture. Every report requires the trusted backend to independently
 verify details, the actual target, group approval and authorization. Absence of
 heuristic findings is not enough to permit a booking. The field is deliberately
 conservative, not a security guarantee or a future payment instruction.
+
+The separate StayNest helper has an explicit backend-only authorization policy
+for simulated contributions. It requires the exact controlled listing URL,
+reviewed HTML fingerprint, trusted merchant, matching complete booking terms,
+full static scan evidence and confirmed cleanup. Only that pinned demo artifact's
+known blocked-UI warning is accepted. The raw inspection remains inconclusive;
+external sites retain the default closed gate. See [the demo policy](staynest/README.md#exact-demo-approval-conditions).
 
 Do not insert descriptions or other page claims into an agent's system prompt,
 treat them as tool commands, evaluate them, or render them as unescaped HTML.
@@ -146,6 +156,12 @@ is an explicit page claim (`available`, `unavailable`, `request_only`), not an
 independent inventory check. Generic pages may legitimately return all nulls.
 JSON-LD is scanned as untrusted DOM text, not executed or accepted as verified
 hidden booking facts. Hidden fact fields do not override visible values.
+The optional merchant ID has one explicit exception: a single inert
+`<script type="application/json" data-booking="merchantId">` record of at most
+512 characters. Only a bounded identifier is accepted; it is never authorization.
+The StayNest backend helper compares it with its separate trusted configuration.
+The visible phrase `Total for your group` maps to the existing `total_group_stay`
+price basis; it does not establish a verified price or grant permission.
 
 Important limits: JavaScript-dependent content, external resources, iframe/shadow
 content not covered by the static DOM, later DOM changes, visual-only attacks,
@@ -179,8 +195,12 @@ was approved in the process environment. Context/browser closure, preview
 revocation and sandbox deletion completed without errors. This does not verify
 arbitrary websites or establish injection-detector completeness.
 
-Local verification: **51 tests passed** and syntax checks passed for all **15
-JavaScript files**. The public CommonJS export was verified without a live call.
+Local verification: **70 tests passed**, including the existing security and
+cleanup checks and narrowly scoped demo authorization tests. See the demo README
+for current live results and the separate raw-inspection/contribution decisions.
+The current real two-page Daytona test passed: the legitimate demo qualified for
+simulated contributions, the malicious demo was blocked, and both sandboxes were
+deleted. The live callback did not collect contributions or debit anyone.
 
 Each command below creates a real sandbox and requires explicit approval:
 

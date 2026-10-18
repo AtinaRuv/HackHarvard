@@ -1,29 +1,32 @@
 {
-    "name": "hackharvard",
-    "version": "1.0.0",
-    "description": "",
-    "main": "server.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "start": "node server.js"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/AtinaRuv/HackHarvard.git"
-    },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
-    "type": "module",
-    "bugs": {
-        "url": "https://github.com/AtinaRuv/HackHarvard/issues"
-    },
-    "homepage": "https://github.com/AtinaRuv/HackHarvard#readme",
-    "dependencies": {
-        "@photon-ai/advanced-imessage": "^2.3.0",
-        "@photon-ai/api": "^0.5.0",
-        "dotenv": "^18.0.8",
-        "express": "^5.3.0",
-        "spectrum-ts": "^12.11.0"
-    }
+  "name": "hackharvard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node fraud/test_tokens.js",
+    "test:lib": "node lib/chat.test.js && node lib/browser.test.js && node lib/bank.test.js && node lib/payments.test.js && node lib/fraud.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AtinaRuv/HackHarvard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/AtinaRuv/HackHarvard/issues"
+  },
+  "homepage": "https://github.com/AtinaRuv/HackHarvard#readme",
+  "dependencies": {
+    "@daytonaio/sdk": "^0.225.0",
+    "@photon-ai/advanced-imessage": "^2.3.0",
+    "@photon-ai/api": "^0.5.0",
+    "cheerio": "^1.2.0",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "stripe": "^23.0.0"
+  }
 }
